@@ -21,7 +21,11 @@
   (total-hams 0)
   (max-ham-score 0.4 :type probability :read-only t)
   (min-spam-score 0.9 :type probability :read-only t)
-  (extract-features-by #'words :type (or function symbol) :read-only t))
+  ;; The type is a symbol to ensure the DB can be serialized.
+  (extract-features-by 'words :type symbol :read-only t))
+
+(defmethod make-load-form ((self db) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defun clear-db (db)
   (prog1 db
@@ -34,17 +38,20 @@
   (spam-count 0 :type unsigned-byte)
   (ham-count 0 :type unsigned-byte))
 
-(defun classify (db text)
+(defmethod make-load-form ((self feature) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun classify (db text &key (min-score (db-min-spam-score db)))
   (~>> text
        (extract-features db)
        (score db)
-       (classify-score db)))
+       (classify-score db _ :min-score min-score)))
 
-(defun classify-score (db score)
+(defun classify-score (db score &key (min-score (db-min-spam-score db)))
   (values
    (cond
      ((<= score (db-max-ham-score db)) :no)
-     ((>= score (db-min-spam-score db)) :yes)
+     ((>= score min-score) :yes)
      (t :unsure))
    score))
 
